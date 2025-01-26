@@ -1,0 +1,18 @@
+name: babyqemu
+services:
+  challenge:
+    build:
+      context: .
+      dockerfile: ./build/Dockerfile
+      args:
+        FLAG: "flag{***REDACTED***}"
+    working_dir: /home/pwn
+    container_name: babyqemu
+    ulimits:
+      nproc: 65535
+      core: 0
+    ports:
+      - "3824:9999"
+    entrypoint: /etc/init.sh
+    init: true
+    restart: always

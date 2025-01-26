@@ -1,0 +1,4 @@
+enable -n $(enable -p | awk -F' ' '{print $2}' | grep -v -e echo -e exit -e export -e pwd -e return -e unset)
+unset $(env | awk -F= '{print $1}')
+export PATH=$(pwd)/../bin
+echo Looney Shell

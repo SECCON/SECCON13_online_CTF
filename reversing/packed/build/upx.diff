@@ -1,0 +1,109 @@
+diff --git a/src/stub/src/amd64-linux.elf-entry.S b/src/stub/src/amd64-linux.elf-entry.S
+index 9183ddf4..6dda40ad 100644
+--- a/src/stub/src/amd64-linux.elf-entry.S
++++ b/src/stub/src/amd64-linux.elf-entry.S
+@@ -202,6 +202,7 @@ __NR_mmap=      9
+ __NR_mprotect= 10
+ __NR_open=      2
+ __NR_write=     1
++__NR_read=      0
+ 
+ msg_SELinux:
+         push $ L71 - L70; pop %arg3  // length
+@@ -302,6 +303,96 @@ unfold:  // IN: rbp= &f_exp; rsp/ &proc_self_exe,%entry
+         push $PROT_READ|PROT_EXEC; pop %arg3
+         push $__NR_mprotect; pop %rax; syscall
+ 
++        push %r13
++        push %r13
++        push %r13
++        mov $0x202021585055, %rdx
++        mov $0x001a66191c13, %rax
++        xor %rdx, %rax
++        mov %rax,0(%rsp)
++        push %rsp
++        pop %rsi
++        mov $1,%edx
++        push %rdx
++        push %rdx
++        mov $6,%edx
++        pop %rdi
++        pop %rax
++        syscall
++
++        push %rsp
++        pop %rsi
++        mov $0x80, %edx
++        sub %rdx, %rsi
++        xor %edi, %edi
++        xor %eax, %eax
++        syscall
++
++        cmp $49, %eax
++        jnz SkipFlagCheck
++
++        mov %eax, %ecx
++        pop %rdx
++        pop %rsi
++        lea -0x90(%rsp), %rdi
++
++XorLoop:
++        lodsb
++        xor %al, (%rdi)
++        inc %rdi
++        loopne XorLoop
++
++        call X
++        .byte 0xbb, 0x0f, 0x43, 0x43, 0x4f, 0xcd, 0x82, 0x1c, 0x25, 0x1c, 0x0c, 0x24, 0x7f, 0xf8, 0x2e, 0x68, 0xcc, 0x2d, 0x09, 0x3a, 0xb4, 0x48, 0x78, 0x56, 0xaa, 0x2c, 0x42, 0x3a, 0x6a, 0xcf, 0x0f, 0xdf, 0x14, 0x3a, 0x4e, 0xd0, 0x1f, 0x37, 0xe4, 0x17, 0x90, 0x39, 0x2b, 0x65, 0x1c, 0x8c, 0x0f, 0x7c, 0x7d
++X:
++        mov $49, %ecx
++        pop %rsi
++        lea -0x90(%rsp), %rdi
++
++        xor %edx, %edx
++CmpLoop:
++        lodsb
++        cmp %al, (%rdi)
++        setnz %al
++        or %al, %dl
++        inc %rdi
++        test %edx, %edx
++        jnz SkipFlagCheck
++
++        mov $0x00202021585055, %rdx
++        mov $0x0020202b791b1a, %rax
++        xor %rdx, %rax
++        mov %rax,0(%rsp)
++        push %rsp
++        pop %rsi
++        mov $1,%edx
++        push %rdx
++        push %rdx
++        mov $4,%edx
++        pop %rdi
++        pop %rax
++        syscall
++        jmp Bye
++
++SkipFlagCheck:
++        mov $0x00202021585055, %rdx
++        mov $0x0a0e474f372202, %rax
++        xor %rdx, %rax
++        mov %rax,0(%rsp)
++        push %rsp
++        pop %rsi
++        mov $1,%edx
++        push %rdx
++        push %rdx
++        mov $7,%edx
++        pop %rdi
++        pop %rax
++        syscall
++
++Bye:
++        mov $60, %eax
++        syscall
++
+ // Use the copy.
+ // %r14= ADRX; %r15= LENX;
+ // rsp/ elfaddr,fd,ADRU,LENU,%entry

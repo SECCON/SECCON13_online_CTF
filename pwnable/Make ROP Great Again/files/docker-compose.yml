@@ -1,0 +1,17 @@
+name: mrga
+services:
+  challenge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        FLAG: "flag{***REDACTED***}"
+    container_name: mrga
+    environment:
+      - JAIL_TIME=60
+      - JAIL_CONNS_PER_IP=3
+      - JAIL_POW=0
+    ports:
+      - "7428:5000"
+    privileged: true
+    restart: always

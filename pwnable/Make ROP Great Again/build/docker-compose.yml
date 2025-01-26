@@ -1,0 +1,17 @@
+name: mrga-prod
+services:
+  challenge:
+    build:
+      context: ..
+      dockerfile: ./build/Dockerfile
+      args:
+        FLAG: "SECCON{53771n6_rd1_w17h_6375_m4k35_r0p_6r347_4641n}"
+    container_name: mrga-prod
+    environment:
+      - JAIL_TIME=60
+      - JAIL_CONNS_PER_IP=3
+      - JAIL_POW=3000
+    ports:
+      - "7428:5000"
+    privileged: true
+    restart: always

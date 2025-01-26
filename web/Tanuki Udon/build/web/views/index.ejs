@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <title>TanukiUdon</title>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <!-- In fact, this emoji is not tanuki. It's raccoon -->
+      <h1>🦝 Tanuki Udon</h1>
+    </header>
+    <section>
+      <p>Your notes:</p>
+      <ul>
+        <% for (const note of notes) { %>
+          <li><a href="/note/<%= note.id %>"><%= note.title %></a></li>
+        <% } %>
+        <% if (notes.length === 0) { %>
+          <li>(empty)</li>
+        <% } %>
+      </ul>
+      <a href="/clear">Clear notes</a>
+    </section>
+    <section>
+      <form action="/note" method="POST">
+        <label for="titleInput">Title: </label>
+        <input id="titleInput" type="input" name="title">
+        <label for="contentInput">Content: </label>
+        <textarea id="contentInput" type="input" name="content"></textarea>
+        <input type="submit" id="createNote" value="Create note">
+      </form>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,277 @@
+diff --git a/include/qemu/log-for-trace.h b/include/qemu/log-for-trace.h
+index d47c9cd446..c66810985f 100644
+--- a/include/qemu/log-for-trace.h
++++ b/include/qemu/log-for-trace.h
+@@ -26,7 +26,7 @@ extern int qemu_loglevel;
+ /* Returns true if a bit is set in the current loglevel mask */
+ static inline bool qemu_loglevel_mask(int mask)
+ {
+-    return (qemu_loglevel & mask) != 0;
++    return 0;
+ }
+ 
+ /* main logging function */
+diff --git a/target/riscv/helper.h b/target/riscv/helper.h
+index 451261ce5a..9c1261d96b 100644
+--- a/target/riscv/helper.h
++++ b/target/riscv/helper.h
+@@ -1,6 +1,8 @@
+ /* Exceptions */
+ DEF_HELPER_2(raise_exception, noreturn, env, i32)
+ 
++DEF_HELPER_FLAGS_3(check, TCG_CALL_NO_RWG, tl, env, tl, tl)
++
+ /* Floating Point - rounding mode */
+ DEF_HELPER_FLAGS_2(set_rounding_mode, TCG_CALL_NO_WG, void, env, i32)
+ DEF_HELPER_FLAGS_2(set_rounding_mode_chkfrm, TCG_CALL_NO_WG, void, env, i32)
+diff --git a/target/riscv/insn32.decode b/target/riscv/insn32.decode
+index c45b8fa1d8..a9df132904 100644
+--- a/target/riscv/insn32.decode
++++ b/target/riscv/insn32.decode
+@@ -1043,3 +1043,9 @@ amominu_h  11000 . . ..... ..... 001 ..... 0101111 @atom_st
+ amomaxu_h  11100 . . ..... ..... 001 ..... 0101111 @atom_st
+ amocas_b    00101 . . ..... ..... 000 ..... 0101111 @atom_st
+ amocas_h    00101 . . ..... ..... 001 ..... 0101111 @atom_st
++
++# SECCON
++seccon0     ............     ..... 000 ..... 0001011 @i
++seccon1     0000000 .....    ..... 001 ..... 0001011 @r
++seccon2     0000000 .....    ..... 010 ..... 0001011 @r
++
+diff --git a/target/riscv/op_helper.c b/target/riscv/op_helper.c
+index 25a5263573..cc15c70e1f 100644
+--- a/target/riscv/op_helper.c
++++ b/target/riscv/op_helper.c
+@@ -34,6 +34,33 @@ G_NORETURN void riscv_raise_exception(CPURISCVState *env,
+     cpu_loop_exit_restore(cs, pc);
+ }
+ 
++const uint64_t encoded[] = {
++    0xc1258110b8c51f9eull, 0xa86354f8bb35d35full, 0xb16ccb3f4d5c8018ull, 0x803ed074b4320ba0ull,
++    0x34968cd63f4d48d8ull, 0xad4ff2ab83fd411ull, 0x2672cbe8244c67full, 0x21d302f1ce581e42ull,
++    0x5086382319de92efull, 0xc41f9ce7c6ca8ebaull, 0xd534200bc7247ff9ull, 0xe424883534b75239ull,
++    0x104a93f53bc6efa1ull, 0x912999c2cff3cf13ull, 0x78178bd0998bc480ull, 0x7e7d4c73b8ffb2b8ull,
++    0xcba80bb864516e5dull, 0xe5bbcf766ca25ce9ull, 0x87bbce79c172df5ull, 0x23cb304feee9a0c7ull,
++    0xcac09104b6bbde7eull, 0xeed6fe5fc72ee54dull, 0xc330d82edd4c152full, 0xb55228f811aa127ull,
++    0xc8cb484145d835d2ull, 0xf62d689de9a1384aull, 0xf2fe357076301ca7ull, 0xb701b9064b5bbd38ull,
++    0x4418934968af30d3ull,
++};
++
++
++target_ulong HELPER(check)(CPURISCVState *env, target_ulong value, target_ulong idx) {
++    target_ulong g = 3;
++    target_ulong a = g;
++
++    for (target_ulong i = 0; i < idx; i++) {
++        a = (a * g) % 29;
++    }
++
++    if (value == encoded[a]) {
++        return 0;
++    }
++
++    return 1;
++}
++
+ void helper_raise_exception(CPURISCVState *env, uint32_t exception)
+ {
+     riscv_raise_exception(env, exception, 0);
+diff --git a/target/riscv/translate.c b/target/riscv/translate.c
+index acba90f170..ab84d6af0e 100644
+--- a/target/riscv/translate.c
++++ b/target/riscv/translate.c
+@@ -1147,6 +1147,135 @@ static uint32_t opcode_at(DisasContextBase *dcbase, target_ulong pc)
+ #include "insn_trans/trans_xthead.c.inc"
+ #include "insn_trans/trans_xventanacondops.c.inc"
+ 
++static inline void add_mod_i64(TCGv_i64 dest, TCGv_i64 a, TCGv_i64 b, TCGv_i64 mod) {
++    TCGv zero = tcg_constant_tl(0);
++    TCGv one = tcg_constant_tl(1);
++    TCGv max = tcg_constant_tl(0xffffffffffffffff);
++    TCGv hrem = tcg_temp_new();
++    TCGv result = tcg_temp_new();
++    TCGv carry = tcg_temp_new();
++    TCGv rlow = tcg_temp_new();
++
++    tcg_gen_add2_i64(rlow, carry, a, zero, b, zero);
++    tcg_gen_remu_i64(hrem, max, mod);
++    tcg_gen_add_i64(hrem, hrem, one);
++    tcg_gen_mul_i64(hrem, hrem, carry);
++
++    tcg_gen_remu_i64(result, rlow, mod);
++    tcg_gen_add_i64(result, result, hrem);
++    tcg_gen_remu_i64(result, result, mod);
++    tcg_gen_mov_i64(dest, result);
++}
++
++static bool trans_seccon0(DisasContext *ctx, arg_seccon0 *a) {
++    TCGv zero = tcg_constant_tl(0);
++    TCGv one = tcg_constant_tl(1);
++    TCGv M = tcg_constant_tl(0xffffffffffffffc5);
++    TCGv b = tcg_constant_tl(659829267229435579);
++    TCGv c = tcg_constant_tl(693847412161824959);
++
++
++    TCGv x = tcg_temp_new();
++    TCGv mul = tcg_temp_new();
++    TCGv lsb = tcg_temp_new();
++    TCGv result = tcg_temp_new();
++    TCGv tmp = tcg_temp_new();
++    TCGLabel *loop = gen_new_label();
++    TCGLabel *check_cond = gen_new_label();
++
++    tcg_gen_mov_tl(x, b);
++    tcg_gen_mov_tl(mul, get_gpr(ctx, a->rs1, EXT_NONE));
++    tcg_gen_mov_tl(result, zero);
++
++    gen_set_label(loop);
++
++    tcg_gen_and_tl(lsb, x, one);
++    tcg_gen_mul_tl(tmp, mul, lsb);
++    add_mod_i64(result, result, tmp, M);
++
++    tcg_gen_shr_tl(x, x, one);
++    add_mod_i64(mul, mul, mul, M);
++
++    gen_set_label(check_cond);
++    tcg_gen_brcond_tl(TCG_COND_GT, x, zero, loop);
++
++    add_mod_i64(result, result, c, M);
++
++    tcg_gen_mov_tl(get_gpr(ctx, a->rd, EXT_NONE), result);
++
++    return true;
++}
++
++static bool trans_seccon1(DisasContext *ctx, arg_seccon1 *a) {
++    TCGv rs1 = get_gpr(ctx, a->rs1, EXT_NONE);
++    TCGv rs2 = get_gpr(ctx, a->rs2, EXT_NONE);
++    TCGv rd = get_gpr(ctx, a->rd, EXT_NONE);
++
++    TCGv loop_max = tcg_constant_tl(TARGET_LONG_BITS / 4);
++    TCGv loop_i = tcg_temp_new();
++    TCGv loop_j = tcg_temp_new();
++    TCGv shift = tcg_temp_new();
++    TCGv result = tcg_temp_new();
++    TCGv zero = tcg_constant_tl(0);
++    TCGv one = tcg_constant_tl(1);
++    TCGv imm7 = tcg_constant_tl(0x7);
++    TCGv imm8 = tcg_constant_tl(0x8);
++    TCGv imm255 = tcg_constant_tl(255);
++    TCGv swap_idx = tcg_temp_new();
++    TCGv idx = tcg_temp_new();
++
++    TCGv tmp_result = tcg_temp_new();
++    TCGv tmp_val = tcg_temp_new();
++    TCGLabel *loop = gen_new_label();
++    TCGLabel *inner_loop = gen_new_label();
++
++    tcg_gen_mov_tl(result, rs1);
++    tcg_gen_mov_tl(loop_i, zero);
++    gen_set_label(loop);
++
++    tcg_gen_mul_tl(shift, loop_i, tcg_constant_tl(4));
++    tcg_gen_shr_tl(swap_idx, rs2, shift);
++    tcg_gen_and_tl(swap_idx, swap_idx, imm7);
++
++    tcg_gen_mov_tl(loop_j, zero);
++    tcg_gen_mov_tl(tmp_result, zero);
++    gen_set_label(inner_loop);
++
++    tcg_gen_mov_tl(idx, loop_j);
++    tcg_gen_movcond_tl(TCG_COND_EQ, idx, loop_j, zero, swap_idx, idx);
++    tcg_gen_movcond_tl(TCG_COND_EQ, idx, loop_j, swap_idx, zero, idx);
++
++    tcg_gen_mul_tl(shift, idx, imm8);
++    tcg_gen_shr_tl(tmp_val, result, shift);
++    tcg_gen_and_tl(tmp_val, tmp_val, imm255);
++
++    tcg_gen_mul_tl(shift, loop_j, imm8);
++    tcg_gen_shl_tl(tmp_val, tmp_val, shift);
++
++    tcg_gen_or_tl(tmp_result, tmp_result, tmp_val);
++
++    tcg_gen_add_tl(loop_j, loop_j, one);
++    tcg_gen_brcond_tl(TCG_COND_LT, loop_j, imm8, inner_loop);
++
++    tcg_gen_mov_tl(result, tmp_result);
++    tcg_gen_add_tl(loop_i, loop_i, one);
++    tcg_gen_brcond_tl(TCG_COND_LT, loop_i, loop_max, loop);
++
++    tcg_gen_mov_tl(rd, result);
++
++    return true;
++}
++
++static bool trans_seccon2(DisasContext *ctx, arg_seccon2 *a) {
++    TCGv rd = get_gpr(ctx, a->rd, EXT_NONE);
++    TCGv rs1 = get_gpr(ctx, a->rs1, EXT_NONE);
++    TCGv rs2 = get_gpr(ctx, a->rs2, EXT_NONE);
++
++    gen_helper_check(rd, tcg_env, rs1, rs2);
++
++    return true;
++}
++
+ /* Include the auto-generated decoder for 16 bit insn */
+ #include "decode-insn16.c.inc"
+ #include "insn_trans/trans_rvzce.c.inc"
+diff --git a/util/log.c b/util/log.c
+index 6219819855..f5600e2ec3 100644
+--- a/util/log.c
++++ b/util/log.c
+@@ -456,54 +456,6 @@ out:
+ }
+ 
+ const QEMULogItem qemu_log_items[] = {
+-    { CPU_LOG_TB_OUT_ASM, "out_asm",
+-      "show generated host assembly code for each compiled TB" },
+-    { CPU_LOG_TB_IN_ASM, "in_asm",
+-      "show target assembly code for each compiled TB" },
+-    { CPU_LOG_TB_OP, "op",
+-      "show micro ops for each compiled TB" },
+-    { CPU_LOG_TB_OP_OPT, "op_opt",
+-      "show micro ops after optimization" },
+-    { CPU_LOG_TB_OP_IND, "op_ind",
+-      "show micro ops before indirect lowering" },
+-#ifdef CONFIG_PLUGIN
+-    { LOG_TB_OP_PLUGIN, "op_plugin",
+-      "show micro ops before plugin injection" },
+-#endif
+-    { CPU_LOG_INT, "int",
+-      "show interrupts/exceptions in short format" },
+-    { CPU_LOG_EXEC, "exec",
+-      "show trace before each executed TB (lots of logs)" },
+-    { CPU_LOG_TB_CPU, "cpu",
+-      "show CPU registers before entering a TB (lots of logs)" },
+-    { CPU_LOG_TB_FPU, "fpu",
+-      "include FPU registers in the 'cpu' logging" },
+-    { CPU_LOG_MMU, "mmu",
+-      "log MMU-related activities" },
+-    { CPU_LOG_PCALL, "pcall",
+-      "x86 only: show protected mode far calls/returns/exceptions" },
+-    { CPU_LOG_RESET, "cpu_reset",
+-      "show CPU state before CPU resets" },
+-    { LOG_UNIMP, "unimp",
+-      "log unimplemented functionality" },
+-    { LOG_GUEST_ERROR, "guest_errors",
+-      "log when the guest OS does something invalid (eg accessing a\n"
+-      "non-existent register)" },
+-    { CPU_LOG_PAGE, "page",
+-      "dump pages at beginning of user mode emulation" },
+-    { CPU_LOG_TB_NOCHAIN, "nochain",
+-      "do not chain compiled TBs so that \"exec\" and \"cpu\" show\n"
+-      "complete traces" },
+-#ifdef CONFIG_PLUGIN
+-    { CPU_LOG_PLUGIN, "plugin", "output from TCG plugins"},
+-#endif
+-    { LOG_STRACE, "strace",
+-      "log every user-mode syscall, its input, and its result" },
+-    { LOG_PER_THREAD, "tid",
+-      "open a separate log file per thread; filename must contain '%d'" },
+-    { CPU_LOG_TB_VPU, "vpu",
+-      "include VPU registers in the 'cpu' logging" },
+-    { 0, NULL, NULL },
+ };
+ 
+ /* takes a comma separated list of log masks. Return 0 if error. */

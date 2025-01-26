@@ -1,0 +1,15 @@
+name: lsh-prod
+services:
+  challenge:
+    build:
+      context: ..
+      dockerfile: ./build/Dockerfile
+    container_name: lsh-prod
+    environment:
+      - JAIL_TIME=60
+      - JAIL_CONNS_PER_IP=5
+      - JAIL_POW=0
+    ports:
+      - "5594:5000"
+    privileged: true
+    restart: always

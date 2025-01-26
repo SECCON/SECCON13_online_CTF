@@ -1,0 +1,15 @@
+services:
+  web:
+    init: true
+    build: ./web
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+  bot:
+    init: true
+    build: ./bot
+    restart: unless-stopped
+    ports:
+      - 1337:1337
+    environment:
+      - FLAG=SECCON{dummy}

@@ -1,0 +1,57 @@
+<html>
+  <head>
+    <title>JavaScrypto</title>
+    <meta charset="utf-8">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js" integrity="sha512-a+SUDuwNzXDvz4XrIcXHuCf089/iJAoN4lmrXJg18XnduKK6YlDHNRalv4yd1N40OKI80tFidF+rqTFKGPoWFQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/purl/2.3.1/purl.min.js" integrity="sha512-xbWNJpa0EduIPOwctW2N6KjW1KAWai6wEfiC3bafkJZyd0X3Q3n5yDTXHd21MIostzgLTwhxjEH+l9a5j3RB4A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="note.js"></script>
+  </head>
+  <body>
+    <div class="flex flex-col items-center bg-orange-100 h-full font-mono gap-4">
+      <p class="p-4 text-xl text-blue-600">
+        JavaS<span class="text-yellow-600">crypto</span>
+      </p>
+
+      <pre id="note" class="p-4 bg-slate-100 rounded w-1/2 text-center"></pre>
+
+      <textarea name="noteInput" id="noteInput" class="w-1/2 p-4"></textarea>
+
+      <button id="createNote" class="p-2 bg-green-200 rounded">Create</button>
+    </div>
+
+    <script type="text/javascript">
+      const key = getOrCreateKey();
+
+      const id = purl().param().id || localStorage.getItem('currentId');
+      if (id && typeof id === 'string') {
+        readNote({
+          id,  
+          key, 
+        }).then(content => {
+          if (content) {
+            localStorage.setItem('currentId', id);
+            document.getElementById('note').innerHTML = content;
+          } else {
+            document.getElementById('note').innerHTML = 'Failed to read';
+          }
+        });
+      } else {
+        document.getElementById('note').innerHTML = 'No note';
+      }
+
+      const onCreate = () => {
+        const content = document.getElementById('noteInput').value;
+        createNote({
+          plaintext: content, 
+          key, 
+        }).then(id => {
+          localStorage.setItem('currentId', id);
+          location.href = `/?id=${id}`;
+        });
+      }
+
+      document.getElementById('createNote').addEventListener('click', onCreate);
+    </script>
+  </body>
+</html>
